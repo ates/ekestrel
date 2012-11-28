@@ -14,7 +14,7 @@ subscribe(Queue) ->
 
 subscribe(Queue, Options) ->
     {ok, Values} = application:get_env(ekestrel, pools),
-    Pools = [{Name, merge(Opts, Options)} || {Name, _, Opts} <- Values],
+    Pools = [{Name, estd_lists:merge(Opts, Options)} || {Name, _, Opts} <- Values],
     do_subscribe(Pools, Queue),
     pg2:join(Queue, self()).
 
@@ -48,13 +48,3 @@ active_pool() ->
     Pools = [Name || {Name, _, _, _} <-
         supervisor:which_children(ekestrel_pools_sup)],
     lists:nth(random:uniform(length(Pools)), Pools).
-
-merge(List1, []) -> lists:reverse(List1);
-merge(List1, [{Key, _} = El | Tail]) ->
-    NewList = case lists:keymember(Key, 1, List1) of
-        true ->
-            [El | lists:keydelete(Key, 1, List1)];
-        false ->
-            [El | List1]
-    end,
-    merge(NewList, Tail).
