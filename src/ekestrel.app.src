@@ -1,0 +1,6 @@
+{application, ekestrel, [
+    {description, "Erlang client for the Kestrel queue server"},
+    {vsn, "0.0.1"},
+    {applications, [kernel, stdlib]},
+    {mod, {ekestrel_app, []}}
+]}.
