@@ -1,7 +1,7 @@
 -module(ekestrel).
 
 %% API
--export([set/3, subscribe/1, unsubscribe/1]).
+-export([set/3, subscribe/1, subscribe/2, unsubscribe/1]).
 
 -spec set(string(), [binary()], non_neg_integer()) -> non_neg_integer().
 set(Queue, Data, TTL) ->
@@ -10,20 +10,23 @@ set(Queue, Data, TTL) ->
 
 -spec subscribe(string()) -> ok.
 subscribe(Queue) ->
+    subscribe(Queue, []).
+
+subscribe(Queue, Options) ->
     {ok, Values} = application:get_env(ekestrel, pools),
-    Pools = [{Name, Opts} || {Name, _, Opts} <- Values],
-    subscribe(Pools, Queue),
+    Pools = [{Name, merge(Opts, Options)} || {Name, _, Opts} <- Values],
+    do_subscribe(Pools, Queue),
     pg2:join(Queue, self()).
 
-subscribe([], _Queue) -> ok;
-subscribe([{Pool, Opts} | Tail], Queue) ->
+do_subscribe([], _Queue) -> ok;
+do_subscribe([{Pool, Opts} | Tail], Queue) ->
     Name = list_to_atom(string:join([atom_to_list(Pool), Queue], "_")),
     Spec = {
         Name, {ekestrel_poll, start_link, [Name, Queue, Opts]},
-        permanent, 5000, worker, [ekestrel_poll]
+        {permanent, 10}, 5000, worker, [ekestrel_poll]
     },
     supervisor:start_child(ekestrel_poll_sup, Spec),
-    subscribe(Tail, Queue).
+    do_subscribe(Tail, Queue).
 
 -spec unsubscribe(string()) -> ok.
 unsubscribe(Queue) ->
@@ -45,3 +48,13 @@ active_pool() ->
     Pools = [Name || {Name, _, _, _} <-
         supervisor:which_children(ekestrel_pools_sup)],
     lists:nth(random:uniform(length(Pools)), Pools).
+
+merge(List1, []) -> lists:reverse(List1);
+merge(List1, [{Key, _} = El | Tail]) ->
+    NewList = case lists:keymember(Key, 1, List1) of
+        true ->
+            [El | lists:keydelete(Key, 1, List1)];
+        false ->
+            [El | List1]
+    end,
+    merge(NewList, Tail).

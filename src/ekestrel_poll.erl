@@ -9,24 +9,34 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          code_change/3, terminate/2]).
 
--record(state, {queue, client}).
+-record(state, {queue, client, poll_time, max_items, timeout}).
 
 -define(POLL_TIME, 2000).
 -define(MAX_ITEMS, 10).
+-define(TIMEOUT, 2000).
 
 start_link(Name, Queue, Options) ->
     HostName = proplists:get_value(hostname, Options),
     Port = proplists:get_value(port, Options),
-    gen_server:start_link({local, Name}, ?MODULE, [Queue, HostName, Port], []).
+    PollTime = proplists:get_value(poll_time, Options, ?POLL_TIME),
+    MaxItems = proplists:get_value(max_items, Options, ?MAX_ITEMS),
+    Timeout = proplists:get_value(timeout, Options, ?TIMEOUT),
+    Opts = [Queue, HostName, Port, PollTime, MaxItems, Timeout],
+    gen_server:start_link({local, Name}, ?MODULE, Opts, []).
 
-init([Queue, HostName, Port]) ->
+init([Queue, HostName, Port, PollTime, MaxItems, Timeout]) ->
     {ok, TFactory} = thrift_socket_transport:new_transport_factory(HostName, Port, [{framed, true}]),
     {ok, PFactory} = thrift_binary_protocol:new_protocol_factory(TFactory, []),
     {ok, Protocol} = PFactory(),
     {ok, Client} = thrift_client:new(Protocol, kestrel_thrift),
     pg2:create(Queue),
-    erlang:send_after(?POLL_TIME, self(), check_queue),
-    {ok, #state{queue = Queue, client = Client}}.
+    State = #state{
+        queue = Queue, client = Client,
+        poll_time = PollTime, max_items = MaxItems,
+        timeout = Timeout
+    },
+    erlang:send_after(0, self(), check_queue),
+    {ok, State}.
 
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
@@ -34,13 +44,17 @@ handle_call(stop, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 handle_info(check_queue, #state{client = Client, queue = Queue} = State) ->
+    PollTime = State#state.poll_time,
+    MaxItems = State#state.max_items,
+    Timeout = State#state.timeout,
     {NewClient, {ok, Items}} =
-        thrift_client:call(Client, get, [Queue, ?MAX_ITEMS, ?POLL_TIME, 0]),
+        thrift_client:call(Client, get, [Queue, MaxItems, Timeout, 0]),
     case length(Items) of
         0 ->
-            erlang:send_after(?POLL_TIME, self(), check_queue);
+            erlang:send_after(PollTime, self(), check_queue);
         _ ->
-            [Pid ! {kestrel_msg, Items} || Pid <- pg2:get_local_members(Queue)],
+            [Pid ! {kestrel_msg, Pid, Items} || Pid <-
+                pg2:get_local_members(Queue)],
             erlang:send_after(0, self(), check_queue)
     end,
     {noreply, State#state{client = NewClient}};
