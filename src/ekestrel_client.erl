@@ -27,7 +27,7 @@ init([HostName, Port]) ->
 
 handle_call({set, Queue, Data, TTL}, _From, State) ->
     {Client, {ok, Reply}} =
-        thrift_client:call(State#state.client, put, [Queue, Data, TTL]),
+        thrift_client:call(State#state.client, put, [Queue, [Data], TTL]),
     {reply, Reply, State#state{client = Client}};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
