@@ -53,7 +53,7 @@ handle_info(check_queue, #state{client = Client, queue = Queue} = State) ->
         0 ->
             erlang:send_after(PollTime, self(), check_queue);
         _ ->
-            [Pid ! {kestrel_msg, self(), Items} || Pid <-
+            [Pid ! {kestrel_msg, self(), Queue, Items} || Pid <-
                 pg2:get_local_members(Queue)],
             erlang:send_after(0, self(), check_queue)
     end,
