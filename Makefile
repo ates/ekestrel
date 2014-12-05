@@ -1,4 +1,7 @@
-REBAR = rebar
+PROJECT = ekestrel
+
+REBAR = $(shell which rebar 2>/dev/null || echo $(PWD)/rebar)
+LIBS = ERL_LIBS=deps
 
 compile:
 	@$(REBAR) compile
@@ -6,10 +9,14 @@ compile:
 deps:
 	@$(REBAR) get-deps
 
+run:
+	@$(REBAR) compile skip_deps=true
+	@$(LIBS) erl -pa ebin -config $(PROJECT) -s $(PROJECT)
+
 clean:
 	@$(REBAR) clean
 
 test:
-	@$(REBAR) xref eunit skip_deps=true
+	@$(REBAR) xref ct skip_deps=true
 
 .PHONY: deps test

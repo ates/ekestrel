@@ -1,18 +1,22 @@
 -module(ekestrel).
 
 %% API
+-export([start/0]).
 -export([set/3, subscribe/1, subscribe/2, unsubscribe/1]).
 
--spec set(string(), [binary()], non_neg_integer()) -> non_neg_integer().
-set(Queue, Data, TTL) ->
+start() ->
+    {ok, _Started} = application:ensure_all_started(?MODULE).
+
+-spec set(string(), binary(), non_neg_integer()) -> non_neg_integer().
+set(Queue, Data, TTL) when is_list(Queue), is_binary(Data) ->
     F = fun(W) -> gen_server:call(W, {set, Queue, Data, TTL}) end,
     poolboy:transaction(active_pool(), F).
 
 -spec subscribe(string()) -> ok.
-subscribe(Queue) ->
+subscribe(Queue) when is_list(Queue) ->
     subscribe(Queue, []).
 
-subscribe(Queue, Options) ->
+subscribe(Queue, Options) when is_list(Queue) ->
     {ok, Values} = application:get_env(ekestrel, pools),
     Pools = [{Name, estd_lists:merge(Opts, Options)} || {Name, _, Opts} <- Values],
     do_subscribe(Pools, Queue),
@@ -22,8 +26,9 @@ do_subscribe([], _Queue) -> ok;
 do_subscribe([{Pool, Opts} | Tail], Queue) ->
     Name = list_to_atom(string:join([atom_to_list(Pool), Queue], "_")),
     Spec = {
-        Name, {ekestrel_poll, start_link, [Name, Queue, Opts]},
-        {permanent, 10}, 5000, worker, [ekestrel_poll]
+        Name,
+        {ekestrel_poll, start_link, [Name, Queue, Opts]},
+        permanent, 5000, worker, [ekestrel_poll]
     },
     supervisor:start_child(ekestrel_poll_sup, Spec),
     do_subscribe(Tail, Queue).
@@ -45,6 +50,5 @@ unsubscribe(Queue) ->
     end.
 
 active_pool() ->
-    Pools = [Name || {Name, _, _, _} <-
-        supervisor:which_children(ekestrel_pools_sup)],
+    Pools = [Name || {Name, _, _, _} <- supervisor:which_children(ekestrel_pools_sup)],
     lists:nth(random:uniform(length(Pools)), Pools).

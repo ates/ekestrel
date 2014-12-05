@@ -47,8 +47,7 @@ handle_info(check_queue, #state{client = Client, queue = Queue} = State) ->
     PollTime = State#state.poll_time,
     MaxItems = State#state.max_items,
     Timeout = State#state.timeout,
-    {NewClient, {ok, Items}} =
-        thrift_client:call(Client, get, [Queue, MaxItems, Timeout, 0]),
+    {NewClient, {ok, Items}} = thrift_client:call(Client, get, [Queue, MaxItems, Timeout, 0]),
     case length(Items) of
         0 ->
             erlang:send_after(PollTime, self(), check_queue);

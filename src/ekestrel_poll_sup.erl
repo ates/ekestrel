@@ -1,6 +1,6 @@
 -module(ekestrel_poll_sup).
 
--behaviour(supervisor2).
+-behaviour(supervisor).
 
 %% API
 -export([start_link/0]).
@@ -9,7 +9,7 @@
 -export([init/1]).
 
 start_link() ->
-    supervisor2:start_link({local, ?MODULE}, ?MODULE, []).
+    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
-    {ok, {{one_for_one, 5, 5}, []}}.
+    {ok, {{one_for_one, 20, 50}, []}}.

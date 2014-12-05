@@ -26,18 +26,13 @@ init([HostName, Port]) ->
     {ok, #state{client = Client}}.
 
 handle_call({set, Queue, Data, TTL}, _From, State) ->
-    {Client, {ok, Reply}} =
-        thrift_client:call(State#state.client, put, [Queue, [Data], TTL]),
-    {reply, Reply, State#state{client = Client}};
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State}.
+    {Client, {ok, Reply}} = thrift_client:call(State#state.client, put, [Queue, [Data], TTL]),
+    {reply, Reply, State#state{client = Client}}.
 
-handle_cast(_Msg, State) ->
-    {noreply, State}.
+handle_cast(_Msg, State) -> {noreply, State}.
 
 handle_info(watchdog, State) ->
-    {Client, {ok, _Version}} =
-        thrift_client:call(State#state.client, get_version, []),
+    {Client, {ok, _Version}} = thrift_client:call(State#state.client, get_version, []),
     erlang:send_after(?WATCHDOG_TIMER, self(), watchdog),
     {noreply, State#state{client = Client}};
 handle_info(_Msg, State) -> {noreply, State}.
